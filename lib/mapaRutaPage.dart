@@ -118,7 +118,7 @@ class _MapaRutaPageState extends State<MapaRutaPage> {
   List<LatLng> clientes = [];
 
   late PolylinePoints polylinePoints;
-  
+  final String googleAPIKey = 'AIzaSyD93cR6yO9PolG9FmsPQhRgpNbLQTymgUY'; // Cambia esto por tu API KEY
 
   @override
   void initState() {
@@ -140,46 +140,109 @@ class _MapaRutaPageState extends State<MapaRutaPage> {
     });
   }
 
+  // Future<void> _obtenerClientes() async {
+  //   final snapshot = await FirebaseFirestore.instance.collection('clientes').get();
+  //   for (var doc in snapshot.docs) {
+  //     final data = doc.data();
+  //     final LatLng position = LatLng(data['latitud'], data['longitud']);
+  //     clientes.add(position);
+  //     markers.add(Marker(
+  //       markerId: MarkerId(doc.id),
+  //       position: position,
+  //       infoWindow: InfoWindow(title: "Cliente"),
+  //       icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+  //     ));
+  //   }
+  //   setState(() {});
+  // }
+
   Future<void> _obtenerClientes() async {
-    final snapshot = await FirebaseFirestore.instance.collection('clientes').get();
-    for (var doc in snapshot.docs) {
-      final data = doc.data();
-      final LatLng position = LatLng(data['latitud'], data['longitud']);
-      clientes.add(position);
-      markers.add(Marker(
-        markerId: MarkerId(doc.id),
-        position: position,
-        infoWindow: InfoWindow(title: "Cliente"),
-        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
-      ));
+  final snapshot = await FirebaseFirestore.instance.collection('clientes').get();
+
+  for (var doc in snapshot.docs) {
+    final data = doc.data();
+
+    if (data.containsKey('latitud') && data.containsKey('longitud')) {
+      try {
+        final double lat = (data['latitud'] as num).toDouble();
+        final double lng = (data['longitud'] as num).toDouble();
+
+        final LatLng position = LatLng(lat, lng);
+        clientes.add(position);
+
+        markers.add(Marker(
+          markerId: MarkerId(doc.id),
+          position: position,
+          infoWindow: const InfoWindow(title: "Cliente"),
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+        ));
+      } catch (e) {
+        print('Error al convertir coordenadas del documento ${doc.id}: $e');
+      }
     }
-    setState(() {});
   }
+
+  setState(() {});
+}
+
+
+  // Future<void> _generarRutaMultipleClientes() async {
+  //   if (conductorPosition == null || clientes.isEmpty) return;
+
+  //   String waypoints = clientes.map((p) => '${p.latitude},${p.longitude}').join('|');
+  //   final origin = '${conductorPosition!.latitude},${conductorPosition!.longitude}';
+
+  //   final url =
+  //       'https://maps.googleapis.com/maps/api/directions/json?origin=$origin&destination=$origin&waypoints=optimize:true|$waypoints&key=$googleAPIKey';
+
+  //   final response = await http.get(Uri.parse(url));
+  //   final data = json.decode(response.body);
+
+  //   if (data['routes'].isNotEmpty) {
+  //     final points = data['routes'][0]['overview_polyline']['points'];
+  //     final List<PointLatLng> result = polylinePoints.decodePolyline(points);
+
+  //     polylineCoordinates.clear();
+  //     for (var point in result) {
+  //       polylineCoordinates.add(LatLng(point.latitude, point.longitude));
+  //     }
+
+  //     setState(() {});
+  //   }
+  // }
 
   Future<void> _generarRutaMultipleClientes() async {
-    if (conductorPosition == null || clientes.isEmpty) return;
+  if (conductorPosition == null || clientes.isEmpty) return;
 
-    String waypoints = clientes.map((p) => '${p.latitude},${p.longitude}').join('|');
-    final origin = '${conductorPosition!.latitude},${conductorPosition!.longitude}';
+  String waypoints = clientes.map((p) => '${p.latitude},${p.longitude}').join('|');
+  final origin = '${conductorPosition!.latitude},${conductorPosition!.longitude}';
 
-    final url =
-        'https://maps.googleapis.com/maps/api/directions/json?origin=$origin&destination=$origin&waypoints=optimize:true|$waypoints&key=$googleAPIKey';
+  final url =
+      'https://maps.googleapis.com/maps/api/directions/json?origin=$origin&destination=$origin&waypoints=optimize:true|$waypoints&key=$googleAPIKey';
 
-    final response = await http.get(Uri.parse(url));
-    final data = json.decode(response.body);
+  final response = await http.get(Uri.parse(url));
+  print('Google Directions API response: ${response.body}');  // Aquí imprimimos la respuesta
 
-    if (data['routes'].isNotEmpty) {
-      final points = data['routes'][0]['overview_polyline']['points'];
-      final List<PointLatLng> result = polylinePoints.decodePolyline(points);
+  final data = json.decode(response.body);
 
-      polylineCoordinates.clear();
-      for (var point in result) {
-        polylineCoordinates.add(LatLng(point.latitude, point.longitude));
-      }
-
-      setState(() {});
-    }
+  if (data['status'] != 'OK') {
+    print('Error en la API de rutas: ${data['status']} - ${data['error_message'] ?? ''}');
+    return;
   }
+
+  if (data['routes'].isNotEmpty) {
+    final points = data['routes'][0]['overview_polyline']['points'];
+    final List<PointLatLng> result = polylinePoints.decodePolyline(points);
+
+    polylineCoordinates.clear();
+    for (var point in result) {
+      polylineCoordinates.add(LatLng(point.latitude, point.longitude));
+    }
+
+    setState(() {});
+  }
+}
+
 
   @override
   Widget build(BuildContext context) {
